@@ -64,3 +64,21 @@ func (me *JsonSerializer) Deserialize(serialized []byte) (interface{}, error) {
 	obj := reflect.Indirect(reflect.ValueOf(objPtr)).Interface()
 	return obj, nil
 }
+
+type PassthruSerializer struct {}
+
+func NewPassthruSerializer() Serializer {
+	return &PassthruSerializer{}
+}
+
+func (me PassthruSerializer) Serialize(obj interface{}) ([]byte, error) {
+	serialized, ok := obj.([]byte)
+	if !ok {
+		return nil, errors.New("Object is not a slice of bytes")
+	}
+	return serialized, nil
+}
+
+func (me PassthruSerializer) Deserialize(serialized []byte) (interface{}, error) {
+	return serialized, nil
+}
