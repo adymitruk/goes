@@ -27,7 +27,8 @@ type AnotherEvent struct {
 
 func setUp() {
 	tempDir := path.Join(os.TempDir(), uuid.NewV4().String())
-	SetStoragePath(tempDir)
+	storage := NewDiskStorage(tempDir)
+	SetStorage(storage)
 	serializer := NewJsonSerializer((*MyEvent)(nil), (*AnotherEvent)(nil))
 	SetSerializer(serializer)
 }

@@ -1,4 +1,5 @@
 package goes
+
 import (
 	"reflect"
 	"encoding/json"
@@ -11,6 +12,7 @@ type Serializer interface {
 	Deserialize([]byte) (interface{}, error)
 }
 
+//TODO: any serializer will require a type registry maybe this should be abstracted
 type JsonSerializer struct {
 	types map[string]reflect.Type
 }
