@@ -1,15 +1,15 @@
 package goes
 
-import (
+import
+(
 	"testing"
 	"github.com/satori/go.uuid"
 	"crypto/rand"
 	"os"
-	_ "path"
+	"path"
 	"reflect"
 	"fmt"
-"math/big"
-	"path"
+	"math/big"
 )
 
 var tempDir string

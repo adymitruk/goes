@@ -7,7 +7,6 @@ import (
 	"bitbucket.org/nicdex/adaptech-goes"
 	"os"
 	"path"
-	"encoding/binary"
 )
 
 func main() {
@@ -15,6 +14,7 @@ func main() {
 
 	//TODO: config/flag
 	storagePath := path.Join(os.TempDir(), uuid.NewV4().String())
+	storagePath = "c:\\dev\\go\\events"
 
 	goes.SetStorage(goes.NewDiskStorage(storagePath))
 	goes.SetSerializer(goes.NewPassthruSerializer())
@@ -53,7 +53,7 @@ func main() {
 				fmt.Println("Wrong format for AggregateId", err)
 				break
 			}
-			fmt.Println(command, aggregateId.String())
+			fmt.Println("->", command, aggregateId.String())
 			data := message[2]
 			err = goes.AddEvent(goes.Event{aggregateId, data})
 			if err != nil {
@@ -66,14 +66,14 @@ func main() {
 				fmt.Println("Wrong format for AggregateId", err)
 				break
 			}
-			fmt.Println(command, aggregateId.String())
+			fmt.Println("->", command, aggregateId.String())
 			events, err := goes.RetrieveFor(aggregateId)
 			if err != nil {
 				panic(err)
 			}
 			sendEvents(replySocket, events)
 		case "ReadAll":
-			fmt.Println(command)
+			fmt.Println("->", command)
 			events, err := goes.RetrieveAll()
 			if err != nil {
 				panic(err)
@@ -85,13 +85,12 @@ func main() {
 
 func sendEvents(socket *zmq4.Socket, events []*goes.Event) {
 	len := len(events)
-	lenBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(lenBytes, uint64(len))
-	socket.SendBytes(lenBytes, zmq4.SNDMORE)
+	socket.Send(fmt.Sprintf("%v", len), zmq4.SNDMORE)
 
 	i := 0
 	for ; i < len-1; i++ {
 		socket.SendBytes(events[i].Payload.([]byte), zmq4.SNDMORE)
 	}
 	socket.SendBytes(events[i].Payload.([]byte), 0)
+	fmt.Println("<-", len, "events")
 }
