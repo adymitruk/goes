@@ -57,7 +57,9 @@ func main() {
 			data := message[2]
 			err = goes.AddEvent(goes.Event{aggregateId, data})
 			if err != nil {
-				panic(err)
+				replySocket.Send(fmt.Sprintf("Error: %v", err), 0)
+				fmt.Println(err)
+				break
 			}
 			replySocket.Send("Ok", 0)
 		case "ReadStream":
@@ -69,14 +71,18 @@ func main() {
 			fmt.Println("->", command, aggregateId.String())
 			events, err := goes.RetrieveFor(aggregateId)
 			if err != nil {
-				panic(err)
+				replySocket.Send(fmt.Sprintf("Error: %v", err), 0)
+				fmt.Println(err)
+				break
 			}
 			sendEvents(replySocket, events)
 		case "ReadAll":
 			fmt.Println("->", command)
 			events, err := goes.RetrieveAll()
 			if err != nil {
-				panic(err)
+				replySocket.Send(fmt.Sprintf("Error: %v", err), 0)
+				fmt.Println(err)
+				break
 			}
 			sendEvents(replySocket, events)
 		}
