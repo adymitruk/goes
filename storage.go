@@ -7,6 +7,7 @@ import (
 	"github.com/satori/go.uuid"
 	"fmt"
 	"errors"
+	"time"
 )
 
 const IntegerSizeInBytes = 8
@@ -14,12 +15,14 @@ const StreamStartingCapacity = 512
 
 type StoredEvent struct {
 	StreamId uuid.UUID
+	CreationTime time.Time
+	TypeId string
 	Data []byte
 }
 
 //TODO: performance - change reads array for some kind of iterator
 type Storage interface {
-	Write(streamId uuid.UUID, data []byte) error
+	Write(event *StoredEvent) error
 	ReadStream(streamId uuid.UUID) ([]*StoredEvent, error)
 	ReadAll() ([]*StoredEvent, error)
 }
@@ -41,8 +44,54 @@ func (me DiskStorage) getFilenameForEvents(stream string) string {
 	return me.getFilename(stream, ".history")
 }
 
-func (me DiskStorage) Write(streamId uuid.UUID, data []byte) error {
-	filename := me.getFilenameForEvents(streamId.String())
+func writeSizeAndBytes(f *os.File, data []byte) (error) {
+	sizeBytes := make([]byte, IntegerSizeInBytes)
+	size := len(data)
+	binary.BigEndian.PutUint64(sizeBytes, uint64(size))
+
+	written, err := f.Write(sizeBytes)
+	if err != nil {
+		return err
+	}
+	if written != IntegerSizeInBytes {
+		return errors.New(fmt.Sprintf("Write error. Expected to write %v bytes, wrote only %v.", IntegerSizeInBytes, written))
+	}
+
+	written, err = f.Write(data)
+	if err != nil {
+		return err
+	}
+	if written != size {
+		return errors.New(fmt.Sprintf("Write error. Expected to write %v bytes, wrote only %v.", size, written))
+	}
+
+	return nil
+}
+
+func readSizedBytes(f *os.File) ([]byte, error) {
+	sizeBytes := make([]byte, IntegerSizeInBytes)
+	read, err := f.Read(sizeBytes)
+	if err != nil {
+		return nil, err
+	}
+	if read != IntegerSizeInBytes {
+		return nil, errors.New(fmt.Sprintf("Integrity error. Expected to read %d bytes, got %d bytes.", IntegerSizeInBytes, read))
+	}
+	size := binary.BigEndian.Uint64(sizeBytes)
+	data := make([]byte, size)
+	read, err = f.Read(data)
+	if err != nil {
+		return nil, err
+	}
+	if uint64(read) != size {
+		return nil, errors.New(fmt.Sprintf("Integrity error. Expected to ready %d bytes, got %d bytes.", IntegerSizeInBytes, read))
+	}
+
+	return data, nil
+}
+
+func (me DiskStorage) Write(event *StoredEvent) error {
+	filename := me.getFilenameForEvents(event.StreamId.String())
 	os.MkdirAll(path.Dir(filename), os.ModeDir)
 
 	indexFile, err := os.OpenFile(me.indexPath, os.O_APPEND | os.O_WRONLY | os.O_CREATE, 0)
@@ -63,12 +112,15 @@ func (me DiskStorage) Write(streamId uuid.UUID, data []byte) error {
 	}
 	position := stat.Size()
 
-	lengthBytes := make([]byte, IntegerSizeInBytes)
-	binary.BigEndian.PutUint64(lengthBytes, uint64(len(data)))
-	eventsFile.Write(lengthBytes)
-	eventsFile.Write(data)
+	creationTimeBytes, err := event.CreationTime.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	writeSizeAndBytes(eventsFile, creationTimeBytes)
+	writeSizeAndBytes(eventsFile, []byte(event.TypeId))
+	writeSizeAndBytes(eventsFile, event.Data)
 
-	indexFile.Write(streamId.Bytes())
+	indexFile.Write(event.StreamId.Bytes())
 	positionBytes := make([]byte, IntegerSizeInBytes)
 	binary.BigEndian.PutUint64(positionBytes, uint64(position))
 	indexFile.Write(positionBytes)
@@ -89,21 +141,18 @@ func (me DiskStorage) ReadStream(streamId uuid.UUID) ([]*StoredEvent, error) {
 
 	eventsFile.Seek(offset, 0)
 
-	contentLengthBytes := make([]byte, IntegerSizeInBytes)
 	results := make([]*StoredEvent, 0)
 	for {
-		read, err := eventsFile.Read(contentLengthBytes)
-		if err != nil {
+		creationTime, typeId, data, err := getStoredData(eventsFile)
+		if err != nil && err.Error() == "EOF" {
 			break
 		}
-		if read != IntegerSizeInBytes {
-			return nil, errors.New("event index integrity error")
-		}
-		data, err := getStoredData(eventsFile, contentLengthBytes)
 		if err != nil {
 			return nil, err
 		}
-		results = append(results, &StoredEvent{streamId, data})
+
+		event := &StoredEvent{streamId, creationTime, typeId, data}
+		results = append(results, event)
 	}
 	return results, nil
 }
@@ -139,18 +188,18 @@ func (me DiskStorage) ReadAll() ([]*StoredEvent, error) {
 		}
 		offset := binary.BigEndian.Uint64(offsetBytes)
 
-		data, err := me.retrieveData(aggregateId, int64(offset))
+		storedEvent, err := me.retrieveStoredEvent(aggregateId, int64(offset))
 		if err != nil {
 			return nil, err
 		}
-		results = append(results, &StoredEvent{aggregateId, data})
+		results = append(results, storedEvent)
 	}
 
 	return results, nil
 }
 
-func (me DiskStorage) retrieveData(aggregateId uuid.UUID, offset int64) ([]byte, error) {
-	filename := me.getFilenameForEvents(aggregateId.String())
+func (me DiskStorage) retrieveStoredEvent(streamId uuid.UUID, offset int64) (*StoredEvent, error) {
+	filename := me.getFilenameForEvents(streamId.String())
 
 	eventsFile, err := os.OpenFile(filename, os.O_RDONLY, 0)
 	if err != nil {
@@ -159,26 +208,33 @@ func (me DiskStorage) retrieveData(aggregateId uuid.UUID, offset int64) ([]byte,
 	defer eventsFile.Close()
 
 	eventsFile.Seek(offset, 0)
-	contentLengthBytes := make([]byte, IntegerSizeInBytes)
-	read, err := eventsFile.Read(contentLengthBytes)
+
+	creationTime, typeId, data, err := getStoredData(eventsFile)
 	if err != nil {
 		return nil, err
 	}
-	if read < IntegerSizeInBytes {
-		return nil, errors.New("event integrity problem")
-	}
-	return getStoredData(eventsFile, contentLengthBytes)
+
+	event := &StoredEvent{streamId, creationTime, typeId, data}
+	return event, nil
 }
 
-func getStoredData(eventsFile *os.File, contentLengthBytes []byte) ([]byte, error) {
-	contentLength := binary.BigEndian.Uint64(contentLengthBytes)
-	data := make([]byte, contentLength)
-	read, err := eventsFile.Read(data)
+func getStoredData(eventsFile *os.File) (creationTime time.Time, typeId string, data []byte, err error) {
+	creationTimeBytes, err := readSizedBytes(eventsFile)
 	if err != nil {
-		return nil, err
+		return
 	}
-	if uint64(read) < contentLength {
-		return nil, errors.New("incomplete event information retrieved")
+	err = creationTime.UnmarshalBinary(creationTimeBytes)
+	if err != nil {
+		return
 	}
-	return data, nil
+
+	typeIdBytes, err := readSizedBytes(eventsFile)
+	if err != nil {
+		return
+	}
+	typeId = string(typeIdBytes)
+
+	data, err = readSizedBytes(eventsFile)
+
+	return
 }

@@ -4,12 +4,11 @@ import (
 	"reflect"
 	"encoding/json"
 	"errors"
-	"bytes"
 )
 
 type Serializer interface {
-	Serialize(interface{}) ([]byte, error)
-	Deserialize([]byte) (interface{}, error)
+	Serialize(interface{}) ([]byte, string, error)
+	Deserialize([]byte, string) (interface{}, error)
 }
 
 //TODO: any serializer will require a type registry maybe this should be abstracted
@@ -33,52 +32,29 @@ func (me *JsonSerializer) RegisterType(t interface{}) {
 	me.types[type_.String()] = type_
 }
 
-func (me *JsonSerializer) Serialize(obj interface{}) ([]byte, error) {
+func (me *JsonSerializer) Serialize(obj interface{}) ([]byte, string, error) {
 	type_ := reflect.TypeOf(obj)
 	if (type_.Kind() == reflect.Interface || type_.Kind() == reflect.Ptr) {
-		return nil, errors.New("Trying to serialize a Ptr type.")
+		return nil, "", errors.New("Trying to serialize a Ptr type.")
 	}
 	typeId := type_.String()
 	data, err := json.Marshal(obj)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return []byte(typeId + " " + string(data)), nil
+	return data, typeId, nil
 }
 
-func (me *JsonSerializer) Deserialize(serialized []byte) (interface{}, error) {
-	separatorIndex := bytes.Index(serialized, []byte{' '})
-	if separatorIndex < 0 {
-		return nil, errors.New("invalid serialized data")
-	}
-	typeId := string(serialized[0:separatorIndex])
+func (me *JsonSerializer) Deserialize(serialized []byte, typeId string) (interface{}, error) {
 	type_ := me.types[typeId]
 	if type_ == nil {
 		return nil, errors.New("type not registered in serializer")
 	}
 	objPtr := reflect.New(type_).Interface()
-	err := json.Unmarshal(serialized[separatorIndex:], objPtr)
+	err := json.Unmarshal(serialized, objPtr)
 	if err != nil {
 		return nil, err
 	}
 	obj := reflect.Indirect(reflect.ValueOf(objPtr)).Interface()
 	return obj, nil
-}
-
-type PassthruSerializer struct {}
-
-func NewPassthruSerializer() Serializer {
-	return &PassthruSerializer{}
-}
-
-func (me PassthruSerializer) Serialize(obj interface{}) ([]byte, error) {
-	serialized, ok := obj.([]byte)
-	if !ok {
-		return nil, errors.New("Object is not a slice of bytes")
-	}
-	return serialized, nil
-}
-
-func (me PassthruSerializer) Deserialize(serialized []byte) (interface{}, error) {
-	return serialized, nil
 }

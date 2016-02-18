@@ -2,6 +2,7 @@ package goes
 
 import (
 	"github.com/satori/go.uuid"
+	"time"
 )
 
 var serializer Serializer
@@ -48,14 +49,12 @@ func AddEvent(event Event) error {
 	lockStream(streamName)
 	defer unlockStream(streamName)
 
-	serializedPayload, err := serializer.Serialize(event.Payload)
+	serializedPayload, typeId, err := serializer.Serialize(event.Payload)
 	if err != nil {
 		return err
 	}
 
-	storage.Write(event.AggregateId, serializedPayload)
-
-	return nil
+	return storage.Write(&StoredEvent{event.AggregateId, time.Now(), typeId, serializedPayload})
 }
 
 func RetrieveFor(aggregateId uuid.UUID) ([]*Event, error) {
@@ -66,7 +65,7 @@ func RetrieveFor(aggregateId uuid.UUID) ([]*Event, error) {
 
 	events := make([]*Event, 0)
 	for _, storedEvent := range results {
-		event, err := serializer.Deserialize(storedEvent.Data)
+		event, err := serializer.Deserialize(storedEvent.Data, storedEvent.TypeId)
 		if err != nil {
 			return nil, err
 		}
@@ -84,7 +83,7 @@ func RetrieveAll() ([]*Event, error) {
 
 	events := make([]*Event, 0)
 	for _, storedEvent := range results {
-		event, err := serializer.Deserialize(storedEvent.Data)
+		event, err := serializer.Deserialize(storedEvent.Data, storedEvent.TypeId)
 		if err != nil {
 			return nil, err
 		}
