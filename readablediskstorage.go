@@ -19,7 +19,9 @@ type ReadableDiskStorage struct {
 func NewReadableDiskStorage(storagePath string) Storage {
 	indexesPath := path.Join(storagePath, "indexes")
 	globalIndexPath := path.Join(indexesPath, "global")
-	os.MkdirAll(indexesPath, 0777)
+	if err := os.MkdirAll(indexesPath, 0777); err != nil {
+		panic(err)
+	}
 	return &ReadableDiskStorage{storagePath, indexesPath, globalIndexPath};
 }
 

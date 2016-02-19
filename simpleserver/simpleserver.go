@@ -5,14 +5,17 @@ import (
 	"github.com/pebbe/zmq4"
 	"github.com/satori/go.uuid"
 	"bitbucket.org/nicdex/adaptech-goes"
-	"os"
-	"path"
 	"bytes"
 	"errors"
+	"flag"
+	"os"
+	"path"
 )
 
-type Serializer struct {
-}
+var port = flag.Int("port", 12345, "port to listen to")
+var db = flag.String("db", fmt.Sprintf(".%cevents", os.PathSeparator), "path for storage")
+
+type Serializer struct {}
 
 func NewSerializer() goes.Serializer {
 	return &Serializer{}
@@ -44,13 +47,26 @@ func (me Serializer) Deserialize(input []byte, typeId string) (interface{}, erro
 	return output, nil
 }
 
+func PathIsAbsolute(s string) bool {
+	if len(s) > 1 && s[1] == ':' {
+		return true
+	}
+	return path.IsAbs(s)
+}
+
 func main() {
 	fmt.Println("Simple ZeroMQ server for goes.")
 
-	//TODO: config/flag
-	storagePath := path.Join(os.TempDir(), uuid.NewV4().String())
-	storagePath = "c:\\dev\\go\\events"
+	flag.Parse()
 
+	storagePath := *db
+	if !PathIsAbsolute(storagePath) {
+		wd, _ := os.Getwd()
+		storagePath = path.Join(wd, storagePath)
+	}
+
+	fmt.Println("Listening on port:", *port)
+	fmt.Println("Storage path:", storagePath)
 	goes.SetStorage(goes.NewReadableDiskStorage(storagePath))
 	goes.SetSerializer(NewSerializer())
 
@@ -66,8 +82,7 @@ func main() {
 	}
 	defer replySocket.Close()
 
-	//TODO: config/flag
-	listenAddr := "tcp://*:12345"
+	listenAddr := fmt.Sprintf("tcp://*:%d", *port)
 	err = replySocket.Bind(listenAddr)
 	if err != nil {
 		panic(err)
@@ -120,6 +135,9 @@ func main() {
 				break
 			}
 			sendEvents(replySocket, events)
+		case "Shutdown":
+			fmt.Println("->", command)
+			return
 		}
 	}
 }
