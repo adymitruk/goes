@@ -34,5 +34,6 @@ export GOPATH=~/go
 # Note: this will ask for credentials
 go get bitbucket.org/nicdex/adaptech-goes
 cd $GOPATH/src/bitbucket.org/nicdex/adaptech-goes
+chmod +x ./scripts/*
 ./scripts/install.sh
 popd
