@@ -12,7 +12,7 @@ import (
 	"path"
 )
 
-var port = flag.Int("port", 12345, "port to listen to")
+var addr = flag.String("addr", "tcp://127.0.0.1:12345", "zeromq address to listen to")
 var db = flag.String("db", fmt.Sprintf(".%cevents", os.PathSeparator), "path for storage")
 
 type Serializer struct {}
@@ -65,7 +65,7 @@ func main() {
 		storagePath = path.Join(wd, storagePath)
 	}
 
-	fmt.Println("Listening on port:", *port)
+	fmt.Println("Listening on:", *addr)
 	fmt.Println("Storage path:", storagePath)
 	goes.SetStorage(goes.NewReadableDiskStorage(storagePath))
 	goes.SetSerializer(NewSerializer())
@@ -82,8 +82,7 @@ func main() {
 	}
 	defer replySocket.Close()
 
-	listenAddr := fmt.Sprintf("tcp://*:%d", *port)
-	err = replySocket.Bind(listenAddr)
+	err = replySocket.Bind(*addr)
 	if err != nil {
 		panic(err)
 	}
