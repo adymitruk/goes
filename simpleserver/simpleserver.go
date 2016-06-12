@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/pebbe/zmq4"
 	"github.com/satori/go.uuid"
-	"bitbucket.org/nicdex/adaptech-goes"
+	goes ".."
 	"bytes"
 	"errors"
 	"flag"
