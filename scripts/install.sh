@@ -2,8 +2,11 @@
 # Install Goes
 go get github.com/satori/go.uuid
 go get github.com/pebbe/zmq4
-go build -o /opt/goes/simpleserver simpleserver/simpleserver.go
-cp -R scripts /opt/goes
+go build -o bin/simpleserver simpleserver/simpleserver.go
+
+sudo mkdir /opt/goes
+sudo cp -R bin /opt/goes
+sudo cp -R scripts /opt/goes
 
 # Reminders
 echo Goes reminders:
