@@ -12,6 +12,8 @@ GoLang implementation of a simple EventStore
 \* On Linux libsodium and zeromq are installed from source (`./configure && make && sudo make install && sudo ldconfig`)  
 ^ On Window libzmq and libsodium are installed using pacman in MSYS2 shell (`pacman -S mingw-w64-x86_64-zeromq`)
 
+You can look at [scripts/bootstrap.sh](https://github.com/adymitruk/goes/blob/master/scripts/bootstrap.sh) to get an idea on how to install all the pre-requisites.
+
 ## Build
 
 ### Fetching GO packages
