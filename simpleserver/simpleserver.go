@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/pebbe/zmq4"
 	"github.com/satori/go.uuid"
-	"github.com/adymitruk/goes"
+	goes ".."
 	"bytes"
 	"errors"
 	"flag"
