@@ -43,7 +43,7 @@ type IndexEntry struct {
 }
 
 func appendIndex(filename string, entry *IndexEntry) error {
-	indexFile, err := os.OpenFile(filename, os.O_APPEND | os.O_WRONLY | os.O_CREATE, 0)
+	indexFile, err := os.OpenFile(filename, os.O_APPEND | os.O_WRONLY | os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func readIndexNextEntry(f *os.File) (*IndexEntry, error) {
 }
 
 func writeEvent(filename string, data []byte) error {
-	eventFile, err := os.OpenFile(filename, os.O_APPEND | os.O_WRONLY | os.O_CREATE, 0)
+	eventFile, err := os.OpenFile(filename, os.O_APPEND | os.O_WRONLY | os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}

@@ -94,13 +94,13 @@ func (me DiskStorage) Write(event *StoredEvent) error {
 	filename := me.getFilenameForEvents(event.StreamId.String())
 	os.MkdirAll(path.Dir(filename), os.ModeDir)
 
-	indexFile, err := os.OpenFile(me.indexPath, os.O_APPEND | os.O_WRONLY | os.O_CREATE, 0)
+	indexFile, err := os.OpenFile(me.indexPath, os.O_APPEND | os.O_WRONLY | os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
 	defer indexFile.Close()
 
-	eventsFile, err := os.OpenFile(filename, os.O_APPEND | os.O_WRONLY | os.O_CREATE, 0)
+	eventsFile, err := os.OpenFile(filename, os.O_APPEND | os.O_WRONLY | os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
