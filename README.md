@@ -26,16 +26,14 @@ In your GOPATH folder, execute the following commands:
   
 ### Compiling the binary
 
-In your GOPATH folder, execute the following command:
+In the project root folder, execute the following command:
 
-  `go build -o bin/goes src/github.com/adymitruk/goes/simpleserver/simpleserver.go`
+  `go build`
   
-\* Use `-o bin/goes.exe` on Windows
-
 ## Running the server
 
-In your GOPATH folder, execute the following command:
+In the project root folder, execute the following command:
 
-  `./bin/goes --db=./events --addr=tcp://127.0.0.1:12345`
+  `./goes --db=./events --addr=tcp://127.0.0.1:12345`
 
 Both flags are optional and their default values are the same as the example.

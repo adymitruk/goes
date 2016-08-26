@@ -1,94 +1,123 @@
-package goes
+package main
 
 import (
+	"fmt"
+	actions "./actions"
+	storage "./storage"
+	serializer "./serializer"
+	data "./data"
 	"github.com/satori/go.uuid"
-	"time"
+	"github.com/pebbe/zmq4"
+	"flag"
+	"os"
+	"path"
 )
 
-var serializer Serializer
-var storage Storage
+var addr = flag.String("addr", "tcp://127.0.0.1:12345", "zeromq address to listen to")
+var db = flag.String("db", fmt.Sprintf(".%cevents", os.PathSeparator), "path for storage")
 
-type Event struct {
-	AggregateId uuid.UUID
-	Payload     interface{}
+func PathIsAbsolute(s string) bool {
+	if len(s) > 1 && s[1] == ':' {
+		return true
+	}
+	return path.IsAbs(s)
 }
 
-func SetStorage(newStorage Storage) {
-	storage = newStorage
-}
+func main() {
+	fmt.Println("Simple ZeroMQ server for goes.")
 
-func SetSerializer(newSerializer Serializer) {
-	serializer = newSerializer
-}
+	flag.Parse()
 
-var mapLock chan int = make(chan int, 1)
-var streamsLock map[string]chan int = make(map[string]chan int)
-
-func lockStream(streamName string) {
-	mapLock <- 1
-	defer func(){
-		<-mapLock
-	}()
-
-	streamLock := streamsLock[streamName]
-	if streamLock == nil {
-		streamLock = make(chan int, 1)
-		streamsLock[streamName] = streamLock
+	storagePath := *db
+	if !PathIsAbsolute(storagePath) {
+		wd, _ := os.Getwd()
+		storagePath = path.Join(wd, storagePath)
 	}
 
-	streamLock <- 1
-}
+	fmt.Println("Listening on:", *addr)
+	fmt.Println("Storage path:", storagePath)
 
-func unlockStream(streamName string) {
-	<-streamsLock[streamName]
-}
+	var handler = actions.NewActionsHandler(storage.NewDailyDiskStorage(storagePath), serializer.NewPassthruSerializer())
 
-func AddEvent(event Event) error {
-	streamName := event.AggregateId.String()
-
-	lockStream(streamName)
-	defer unlockStream(streamName)
-
-	serializedPayload, typeId, err := serializer.Serialize(event.Payload)
+	context, err := zmq4.NewContext()
 	if err != nil {
-		return err
+		panic(err)
 	}
+	defer context.Term()
 
-	return storage.Write(&StoredEvent{event.AggregateId, time.Now(), typeId, serializedPayload})
-}
-
-func RetrieveFor(aggregateId uuid.UUID) ([]*Event, error) {
-	results, err := storage.ReadStream(aggregateId)
+	replySocket, err := context.NewSocket(zmq4.REP)
 	if err != nil {
-		return nil, err
+		panic(err)
+	}
+	defer replySocket.Close()
+
+	err = replySocket.Bind(*addr)
+	if err != nil {
+		panic(err)
 	}
 
-	events := make([]*Event, 0)
-	for _, storedEvent := range results {
-		event, err := serializer.Deserialize(storedEvent.Data, storedEvent.TypeId)
+	for {
+		message, err := replySocket.RecvMessageBytes(0)
 		if err != nil {
-			return nil, err
+			fmt.Println("Error receiving command from client", err)
+			continue
 		}
-		events = append(events, &Event{storedEvent.StreamId, event})
-	}
 
-	return events, nil
+		command := string(message[0])
+		switch command {
+		case "AddEvent":
+			aggregateId, err := uuid.FromBytes(message[1])
+			if err != nil {
+				fmt.Println("Wrong format for AggregateId", err)
+				break
+			}
+			fmt.Println("->", command, aggregateId.String())
+			payload := message[2]
+			err = handler.AddEvent(data.Event{AggregateId: aggregateId, Payload: payload})
+			if err != nil {
+				replySocket.Send(fmt.Sprintf("Error: %v", err), 0)
+				fmt.Println(err)
+				break
+			}
+			replySocket.Send("Ok", 0)
+		case "ReadStream":
+			aggregateId, err := uuid.FromBytes(message[1])
+			if err != nil {
+				fmt.Println("Wrong format for AggregateId", err)
+				break
+			}
+			fmt.Println("->", command, aggregateId.String())
+			events, err := handler.RetrieveFor(aggregateId)
+			if err != nil {
+				replySocket.Send(fmt.Sprintf("Error: %v", err), 0)
+				fmt.Println(err)
+				break
+			}
+			sendEvents(replySocket, events)
+		case "ReadAll":
+			fmt.Println("->", command)
+			events, err := handler.RetrieveAll()
+			if err != nil {
+				replySocket.Send(fmt.Sprintf("Error: %v", err), 0)
+				fmt.Println(err)
+				break
+			}
+			sendEvents(replySocket, events)
+		case "Shutdown":
+			fmt.Println("->", command)
+			return
+		}
+	}
 }
 
-func RetrieveAll() ([]*Event, error) {
-	results, err := storage.ReadAll()
-	if err != nil {
-		return nil, err
-	}
+func sendEvents(socket *zmq4.Socket, events []*data.Event) {
+	len := len(events)
+	socket.Send(fmt.Sprintf("%v", len), zmq4.SNDMORE)
 
-	events := make([]*Event, 0)
-	for _, storedEvent := range results {
-		event, err := serializer.Deserialize(storedEvent.Data, storedEvent.TypeId)
-		if err != nil {
-			return nil, err
-		}
-		events = append(events, &Event{storedEvent.StreamId, event})
+	i := 0
+	for ; i < len-1; i++ {
+		socket.SendBytes(events[i].Payload.([]byte), zmq4.SNDMORE)
 	}
-
-	return events, nil
+	socket.SendBytes(events[i].Payload.([]byte), 0)
+	fmt.Println("<-", len, "events")
 }

@@ -1,4 +1,4 @@
-package goes
+package serializer
 
 import (
 	"reflect"
@@ -6,12 +6,6 @@ import (
 	"errors"
 )
 
-type Serializer interface {
-	Serialize(interface{}) ([]byte, string, error)
-	Deserialize([]byte, string) (interface{}, error)
-}
-
-//TODO: any serializer will require a type registry maybe this should be abstracted
 type JsonSerializer struct {
 	types map[string]reflect.Type
 }

@@ -1,46 +1,29 @@
-package goes
+package storage
 
 import (
-	"os"
-	"path"
 	"encoding/binary"
 	"github.com/satori/go.uuid"
+	"os"
+	"time"
+	"path"
 	"fmt"
 	"errors"
-	"time"
 )
 
-const IntegerSizeInBytes = 8
-const StreamStartingCapacity = 512
-
-type StoredEvent struct {
-	StreamId uuid.UUID
-	CreationTime time.Time
-	TypeId string
-	Data []byte
+func NewSimpleDiskStorage(storagePath string) Storage {
+	return &SimpleDiskStorage{storagePath, path.Join(storagePath, "eventindex")}
 }
 
-//TODO: performance - change reads array for some kind of iterator
-type Storage interface {
-	Write(event *StoredEvent) error
-	ReadStream(streamId uuid.UUID) ([]*StoredEvent, error)
-	ReadAll() ([]*StoredEvent, error)
-}
-
-func NewDiskStorage(storagePath string) Storage {
-	return &DiskStorage{storagePath, path.Join(storagePath, "eventindex")}
-}
-
-type DiskStorage struct {
+type SimpleDiskStorage struct {
 	storagePath string
 	indexPath string
 }
 
-func (me DiskStorage) getFilename(stream, extension string) string {
+func (me SimpleDiskStorage) getFilename(stream, extension string) string {
 	return fmt.Sprintf("%v%v", path.Join(me.storagePath, stream[0:2], stream[2:]), extension)
 }
 
-func (me DiskStorage) getFilenameForEvents(stream string) string {
+func (me SimpleDiskStorage) GetFilenameForEvents(stream string) string {
 	return me.getFilename(stream, ".history")
 }
 
@@ -90,8 +73,8 @@ func readSizedBytes(f *os.File) ([]byte, error) {
 	return data, nil
 }
 
-func (me DiskStorage) Write(event *StoredEvent) error {
-	filename := me.getFilenameForEvents(event.StreamId.String())
+func (me SimpleDiskStorage) Write(event *StoredEvent) error {
+	filename := me.GetFilenameForEvents(event.StreamId.String())
 	os.MkdirAll(path.Dir(filename), os.ModeDir)
 
 	indexFile, err := os.OpenFile(me.indexPath, os.O_APPEND | os.O_WRONLY | os.O_CREATE, 0644)
@@ -128,10 +111,10 @@ func (me DiskStorage) Write(event *StoredEvent) error {
 	return nil
 }
 
-func (me DiskStorage) ReadStream(streamId uuid.UUID) ([]*StoredEvent, error) {
+func (me SimpleDiskStorage) ReadStream(streamId uuid.UUID) ([]*StoredEvent, error) {
 	streamName := streamId.String()
 	offset := int64(0) //TODO snapshots
-	filename := me.getFilenameForEvents(streamName)
+	filename := me.GetFilenameForEvents(streamName)
 
 	eventsFile, err := os.OpenFile(filename, os.O_RDONLY, 0)
 	if err != nil {
@@ -157,7 +140,7 @@ func (me DiskStorage) ReadStream(streamId uuid.UUID) ([]*StoredEvent, error) {
 	return results, nil
 }
 
-func (me DiskStorage) ReadAll() ([]*StoredEvent, error) {
+func (me SimpleDiskStorage) ReadAll() ([]*StoredEvent, error) {
 	indexFile, err := os.OpenFile(me.indexPath, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
@@ -198,8 +181,8 @@ func (me DiskStorage) ReadAll() ([]*StoredEvent, error) {
 	return results, nil
 }
 
-func (me DiskStorage) retrieveStoredEvent(streamId uuid.UUID, offset int64) (*StoredEvent, error) {
-	filename := me.getFilenameForEvents(streamId.String())
+func (me SimpleDiskStorage) retrieveStoredEvent(streamId uuid.UUID, offset int64) (*StoredEvent, error) {
+	filename := me.GetFilenameForEvents(streamId.String())
 
 	eventsFile, err := os.OpenFile(filename, os.O_RDONLY, 0)
 	if err != nil {
@@ -238,3 +221,4 @@ func getStoredData(eventsFile *os.File) (creationTime time.Time, typeId string, 
 
 	return
 }
+

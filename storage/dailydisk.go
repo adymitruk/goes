@@ -1,4 +1,4 @@
-package goes
+package storage
 
 import (
 	"path"
@@ -10,26 +10,26 @@ import (
 	"io/ioutil"
 )
 
-type ReadableDiskStorage struct {
+type DailyDiskStorage struct {
 	storagePath string
 	indexesPath string
 	globalIndexFilename string
 }
 
-func NewReadableDiskStorage(storagePath string) Storage {
+func NewDailyDiskStorage(storagePath string) Storage {
 	indexesPath := path.Join(storagePath, "indexes")
 	globalIndexPath := path.Join(indexesPath, "global")
 	if err := os.MkdirAll(indexesPath, 0777); err != nil {
 		panic(err)
 	}
-	return &ReadableDiskStorage{storagePath, indexesPath, globalIndexPath};
+	return &DailyDiskStorage{storagePath, indexesPath, globalIndexPath};
 }
 
-func (me ReadableDiskStorage) getStreamIndexFilename(streamId uuid.UUID) string {
+func (me DailyDiskStorage) getStreamIndexFilename(streamId uuid.UUID) string {
 	return path.Join(me.indexesPath, streamId.String())
 }
 
-func (me ReadableDiskStorage) getEventFilename(creationTime time.Time, typeId string) string {
+func (me DailyDiskStorage) getEventFilename(creationTime time.Time, typeId string) string {
 	yearMonth := fmt.Sprintf("%04d%02d", creationTime.Year(), creationTime.Month())
 	day := fmt.Sprintf("%02d", creationTime.Day())
 	eventFilename := fmt.Sprintf("%02d%02d%02d%09d_%s", creationTime.Hour(), creationTime.Minute(), creationTime.Second(), creationTime.Nanosecond(), typeId)
@@ -110,7 +110,7 @@ func readEvent(filename string) ([]byte, error) {
 	return ioutil.ReadFile(filename)
 }
 
-func (me ReadableDiskStorage) Write(event *StoredEvent) error {
+func (me DailyDiskStorage) Write(event *StoredEvent) error {
 
 	eventFilename := me.getEventFilename(event.CreationTime, event.TypeId)
 	os.MkdirAll(path.Dir(eventFilename), 0777)
@@ -135,7 +135,7 @@ func (me ReadableDiskStorage) Write(event *StoredEvent) error {
 	return nil
 }
 
-func (me ReadableDiskStorage) ReadStream(streamId uuid.UUID) ([]*StoredEvent, error) {
+func (me DailyDiskStorage) ReadStream(streamId uuid.UUID) ([]*StoredEvent, error) {
 
 	indexFile, err := os.OpenFile(me.getStreamIndexFilename(streamId), os.O_RDONLY, 0)
 	if err != nil {
@@ -163,7 +163,7 @@ func (me ReadableDiskStorage) ReadStream(streamId uuid.UUID) ([]*StoredEvent, er
 	return events, nil
 }
 
-func (me ReadableDiskStorage) ReadAll() ([]*StoredEvent, error) {
+func (me DailyDiskStorage) ReadAll() ([]*StoredEvent, error) {
 	indexFile, err := os.OpenFile(me.globalIndexFilename, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
