@@ -1,17 +1,16 @@
 package main
 
-import
-(
-	"testing"
+import (
+	actions "./actions"
+	data "./data"
+	serializer "./serializer"
+	storage "./storage"
+	"bytes"
 	"github.com/satori/go.uuid"
+	"io/ioutil"
 	"os"
 	"path"
-	"io/ioutil"
-	"bytes"
-	storage "./storage"
-	serializer "./serializer"
-	data "./data"
-	actions "./actions"
+	"testing"
 )
 
 var tempDir string
@@ -31,7 +30,7 @@ type AnotherEvent struct {
 }
 
 func setUp() {
-	tempDir := path.Join(os.TempDir(), uuid.NewV4().String())
+	tempDir = path.Join(os.TempDir(), uuid.NewV4().String())
 	_storage = storage.NewSimpleDiskStorage(tempDir)
 	_serializer = serializer.NewJsonSerializer((*AnEvent)(nil), (*AnotherEvent)(nil))
 	handler = actions.NewActionsHandler(_storage, _serializer)
@@ -45,7 +44,7 @@ func tearDown() {
 }
 
 func wrapEvent(aggregateId uuid.UUID, event interface{}) data.Event {
-	return data.Event{AggregateId: aggregateId, Payload: event}
+	return data.Event{AggregateId: aggregateId, Payload: event, Metadata: nil}
 }
 
 func TestSerializeEventToJson(t *testing.T) {
@@ -53,13 +52,13 @@ func TestSerializeEventToJson(t *testing.T) {
 	defer tearDown()
 
 	ev := wrapEvent(uuid.NewV4(), AnEvent{int64(1024), "Tests"})
-	err := handler.AddEvent(ev)
+	err := handler.AddEvent(ev, actions.NO_EXPECTEDVERSION)
 	if err != nil {
 		t.Errorf("AddEvent failed with %q", err)
 		return
 	}
 
-	filename := (_storage.(*storage.SimpleDiskStorage)).GetFilenameForEvents(ev.AggregateId.String());
+	filename := (_storage.(*storage.SimpleDiskStorage)).GetFilenameForEvents(ev.AggregateId.String())
 	if fi, _ := os.Stat(filename); fi == nil {
 		t.Errorf("AddEvent failed to create file %q", filename)
 		return
@@ -77,13 +76,13 @@ func TestSerializeEventsForSameAggregateInSameFile(t *testing.T) {
 
 	aggregateId := uuid.NewV4()
 	ev1 := wrapEvent(aggregateId, AnEvent{int64(12345), "Hello"})
-	err := handler.AddEvent(ev1)
+	err := handler.AddEvent(ev1, actions.NO_EXPECTEDVERSION)
 	if err != nil {
 		t.Errorf("AddEvent failed with %q", err)
 		return
 	}
 	ev2 := wrapEvent(aggregateId, AnotherEvent{int64(23456), "Bob", 123.45})
-	err = handler.AddEvent(ev2)
+	err = handler.AddEvent(ev2, actions.NO_EXPECTEDVERSION)
 	if err != nil {
 		t.Errorf("AddEvent failed with %q", err)
 		return
@@ -102,13 +101,13 @@ func TestTypeInformationIsProvided(t *testing.T) {
 	defer tearDown()
 
 	ev := wrapEvent(uuid.NewV4(), AnEvent{int64(1024), "Tests"})
-	err := handler.AddEvent(ev)
+	err := handler.AddEvent(ev, actions.NO_EXPECTEDVERSION)
 	if err != nil {
 		t.Errorf("AddEvent failed with %q", err)
 		return
 	}
 
-	filename := (_storage.(*storage.SimpleDiskStorage)).GetFilenameForEvents(ev.AggregateId.String());
+	filename := (_storage.(*storage.SimpleDiskStorage)).GetFilenameForEvents(ev.AggregateId.String())
 	if fi, _ := os.Stat(filename); fi == nil {
 		t.Errorf("AddEvent failed to create file %q", filename)
 		return
@@ -126,13 +125,13 @@ func TestEventsCanBeRetrieved(t *testing.T) {
 
 	aggregateId := uuid.NewV4()
 	ev1 := wrapEvent(aggregateId, AnEvent{int64(12345), "Hello"})
-	err := handler.AddEvent(ev1)
+	err := handler.AddEvent(ev1, actions.NO_EXPECTEDVERSION)
 	if err != nil {
 		t.Errorf("AddEvent failed with %q", err)
 		return
 	}
 	ev2 := wrapEvent(aggregateId, AnotherEvent{int64(23456), "Bob", 123.45})
-	err = handler.AddEvent(ev2)
+	err = handler.AddEvent(ev2, actions.NO_EXPECTEDVERSION)
 	if err != nil {
 		t.Errorf("AddEvent failed with %q", err)
 		return
@@ -141,7 +140,7 @@ func TestEventsCanBeRetrieved(t *testing.T) {
 	events, err := handler.RetrieveFor(aggregateId)
 	switch {
 	case err != nil:
-		t.Errorf("RetrieveFor(%q) failed with %q", aggregateId.String(), err)
+		t.Errorf("RetrieveFor(%q) failed with %q. %q", aggregateId.String(), err, tempDir)
 	case len(events) != 2:
 		t.Errorf("RetrieveFor(%q) returned %v events, expected %v", aggregateId.String(), len(events), 2)
 	case !ev1.Equals(events[0]):
@@ -160,14 +159,14 @@ func TestEventsCanBeReplayedInOrder(t *testing.T) {
 	testEvent1 := wrapEvent(aggregateId1, AnEvent{int64(123), "Hello 1"})
 	testEvent2 := wrapEvent(aggregateId2, AnEvent{int64(456), "Hello 2"})
 	testEvent3 := wrapEvent(aggregateId1, AnEvent{int64(789), "Hello 3"})
-	handler.AddEvent(testEvent1)
-	handler.AddEvent(testEvent2)
-	handler.AddEvent(testEvent3)
+	handler.AddEvent(testEvent1, actions.NO_EXPECTEDVERSION)
+	handler.AddEvent(testEvent2, actions.NO_EXPECTEDVERSION)
+	handler.AddEvent(testEvent3, actions.NO_EXPECTEDVERSION)
 
 	events, err := handler.RetrieveAll()
 	switch {
 	case err != nil:
-		t.Errorf("RetrieveAll failed with %q", err)
+		t.Errorf("RetrieveAll failed with %q %q", err, tempDir)
 	case len(events) != 3:
 		t.Errorf("RetrieveAll returned %v events, expected %v", len(events), 3)
 	case !testEvent1.Equals(events[0]) || !testEvent2.Equals(events[1]) || !testEvent3.Equals(events[2]):
@@ -179,4 +178,4 @@ func TestEventsCanBeReplayedInOrder(t *testing.T) {
 	Missing tests from https://gist.github.com/adymitruk/b4627b74617a37b6d949
 	- GUID reversal for distribution
 	- Created date stored with event
- */
+*/

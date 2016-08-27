@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"encoding/json"
 	"errors"
+	"fmt"
 )
 
 type JsonSerializer struct {
@@ -27,6 +28,9 @@ func (me *JsonSerializer) RegisterType(t interface{}) {
 }
 
 func (me *JsonSerializer) Serialize(obj interface{}) ([]byte, string, error) {
+	if obj == nil {
+		return []byte(""), "", nil
+	}
 	type_ := reflect.TypeOf(obj)
 	if (type_.Kind() == reflect.Interface || type_.Kind() == reflect.Ptr) {
 		return nil, "", errors.New("Trying to serialize a Ptr type.")
@@ -40,9 +44,12 @@ func (me *JsonSerializer) Serialize(obj interface{}) ([]byte, string, error) {
 }
 
 func (me *JsonSerializer) Deserialize(serialized []byte, typeId string) (interface{}, error) {
+	if (typeId == "") {
+		return nil, nil
+	}
 	type_ := me.types[typeId]
 	if type_ == nil {
-		return nil, errors.New("type not registered in serializer")
+		return nil, errors.New(fmt.Sprintf("type %q not registered in serializer", typeId))
 	}
 	objPtr := reflect.New(type_).Interface()
 	err := json.Unmarshal(serialized, objPtr)

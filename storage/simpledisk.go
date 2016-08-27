@@ -111,6 +111,11 @@ func (me SimpleDiskStorage) Write(event *StoredEvent) error {
 	return nil
 }
 
+func (me SimpleDiskStorage) StreamVersion(streamId uuid.UUID) (uint32, error) {
+	//TODO
+	return EMPTY_STREAM, nil
+}
+
 func (me SimpleDiskStorage) ReadStream(streamId uuid.UUID) ([]*StoredEvent, error) {
 	streamName := streamId.String()
 	offset := int64(0) //TODO snapshots
@@ -134,7 +139,8 @@ func (me SimpleDiskStorage) ReadStream(streamId uuid.UUID) ([]*StoredEvent, erro
 			return nil, err
 		}
 
-		event := &StoredEvent{streamId, creationTime, typeId, data}
+		//TODO metadata
+		event := &StoredEvent{streamId, creationTime, typeId, data, "", nil}
 		results = append(results, event)
 	}
 	return results, nil
@@ -197,7 +203,8 @@ func (me SimpleDiskStorage) retrieveStoredEvent(streamId uuid.UUID, offset int64
 		return nil, err
 	}
 
-	event := &StoredEvent{streamId, creationTime, typeId, data}
+	//TODO metadata
+	event := &StoredEvent{streamId, creationTime, typeId, data, "", nil}
 	return event, nil
 }
 

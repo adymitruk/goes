@@ -1,8 +1,12 @@
+# Goes
+
 GoLang implementation of a simple EventStore
 
-# Getting started
+Released under the MIT license. See [LICENSE](https://github.com/adymitruk/goes/blob/master/LICENSE) file.
 
-## Pre-requisites
+## Getting started
+
+### Pre-requisites
 
 - Install [GoLang](https://golang.org/doc/install) version 1.6+
 - Install [libsodium](https://download.libsodium.org/libsodium/releases/)\* version 1.0.10+ (Linux only^)
@@ -14,9 +18,9 @@ GoLang implementation of a simple EventStore
 
 You can look at [scripts/bootstrap.sh](https://github.com/adymitruk/goes/blob/master/scripts/bootstrap.sh) to get an idea on how to install all the pre-requisites.
 
-## Build
+### Build
 
-### Fetching GO packages
+#### Fetching GO packages
 
 In your GOPATH folder, execute the following commands:
 
@@ -24,13 +28,13 @@ In your GOPATH folder, execute the following commands:
   `go get github.com/pebbe/zmq4`  
   `go get github.com/satori/go.uuid`  
   
-### Compiling the binary
+#### Compiling the binary
 
 In the project root folder, execute the following command:
 
   `go build`
   
-## Running the server
+### Running the server
 
 In the project root folder, execute the following command:
 

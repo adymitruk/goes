@@ -8,7 +8,11 @@ import (
 	"fmt"
 	"errors"
 	"io/ioutil"
+	"bytes"
 )
+
+const EMPTY_STREAM = uint32(0)
+var CRLF = []byte {'\r', '\n'}
 
 type DailyDiskStorage struct {
 	storagePath string
@@ -94,7 +98,7 @@ func readIndexNextEntry(f *os.File) (*IndexEntry, error) {
 	return &index, nil;
 }
 
-func writeEvent(filename string, data []byte) error {
+func writeEvent(filename string, data []byte, metadata []byte) error {
 	eventFile, err := os.OpenFile(filename, os.O_APPEND | os.O_WRONLY | os.O_CREATE, 0644)
 	if err != nil {
 		return err
@@ -102,12 +106,26 @@ func writeEvent(filename string, data []byte) error {
 	defer eventFile.Close()
 
 	eventFile.Write(data)
+	eventFile.Write(CRLF)
+	eventFile.Write(metadata)
 
 	return nil
 }
 
-func readEvent(filename string) ([]byte, error) {
-	return ioutil.ReadFile(filename)
+func readEvent(filename string) (data []byte, metadata []byte, err error) {
+	content, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return
+	}
+	sep := bytes.Index(content, CRLF)
+	if sep == -1 {
+		data = content
+		metadata = make([]byte, 0)
+		return
+	}
+	data = content[:sep]
+	metadata = content[sep+2:]
+	return
 }
 
 func (me DailyDiskStorage) Write(event *StoredEvent) error {
@@ -115,7 +133,7 @@ func (me DailyDiskStorage) Write(event *StoredEvent) error {
 	eventFilename := me.getEventFilename(event.CreationTime, event.TypeId)
 	os.MkdirAll(path.Dir(eventFilename), 0777)
 
-	err := writeEvent(eventFilename, event.Data)
+	err := writeEvent(eventFilename, event.Data, event.Metadata)
 	if err != nil {
 		return err
 	}
@@ -135,11 +153,33 @@ func (me DailyDiskStorage) Write(event *StoredEvent) error {
 	return nil
 }
 
+func (me DailyDiskStorage) StreamVersion(streamId uuid.UUID) (uint32, error) {
+	indexFile, err := os.OpenFile(me.getStreamIndexFilename(streamId), os.O_RDONLY, 0)
+	if err != nil {
+		return EMPTY_STREAM, errors.New("NOT_FOUND: " + err.Error())
+	}
+	defer indexFile.Close()
+
+	ver := EMPTY_STREAM
+	for {
+		_, err := readIndexNextEntry(indexFile)
+		if err != nil && err.Error() == "EOF" {
+			break
+		}
+		if err != nil {
+			return EMPTY_STREAM, err
+		}
+		ver++
+	}
+
+	return ver, nil
+}
+
 func (me DailyDiskStorage) ReadStream(streamId uuid.UUID) ([]*StoredEvent, error) {
 
 	indexFile, err := os.OpenFile(me.getStreamIndexFilename(streamId), os.O_RDONLY, 0)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("NOT_FOUND: " + err.Error())
 	}
 	defer indexFile.Close()
 
@@ -152,11 +192,11 @@ func (me DailyDiskStorage) ReadStream(streamId uuid.UUID) ([]*StoredEvent, error
 		if err != nil {
 			return nil, err
 		}
-		data, err := readEvent(me.getEventFilename(indexEntry.creationTime, indexEntry.typeId))
+		data, metadata, err := readEvent(me.getEventFilename(indexEntry.creationTime, indexEntry.typeId))
 		if err != nil {
 			return nil, err
 		}
-		event := &StoredEvent{streamId, indexEntry.creationTime, indexEntry.typeId, data}
+		event := &StoredEvent{streamId, indexEntry.creationTime, indexEntry.typeId, data, "Metadata", metadata}
 		events = append(events, event)
 	}
 
@@ -179,11 +219,11 @@ func (me DailyDiskStorage) ReadAll() ([]*StoredEvent, error) {
 		if err != nil {
 			return nil, err
 		}
-		data, err := readEvent(me.getEventFilename(indexEntry.creationTime, indexEntry.typeId))
+		data, metadata, err := readEvent(me.getEventFilename(indexEntry.creationTime, indexEntry.typeId))
 		if err != nil {
 			return nil, err
 		}
-		event := &StoredEvent{indexEntry.streamId, indexEntry.creationTime, indexEntry.typeId, data}
+		event := &StoredEvent{indexEntry.streamId, indexEntry.creationTime, indexEntry.typeId, data, "Metadata", metadata}
 		events = append(events, event)
 	}
 

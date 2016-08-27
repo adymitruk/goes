@@ -3,11 +3,14 @@ package data
 import (
 	"github.com/satori/go.uuid"
 	"reflect"
+	"time"
 )
 
 type Event struct {
-	AggregateId uuid.UUID
-	Payload     interface{}
+	AggregateId 	uuid.UUID
+	CreationTime 	time.Time
+	Payload     	interface{}
+	Metadata    	interface{}
 }
 
 func (me *Event) Equals(other *Event) bool {

@@ -12,6 +12,10 @@ func NewPassthruSerializer() *PassthruSerializer {
 }
 
 func (me PassthruSerializer) Serialize(input interface{}) (output []byte, typeId string, err error) {
+	if input == nil {
+		return nil, "", nil
+	}
+
 	content, ok := input.([]byte)
 	if !ok {
 		err = errors.New("input should be []byte")
@@ -30,6 +34,10 @@ func (me PassthruSerializer) Serialize(input interface{}) (output []byte, typeId
 }
 
 func (me PassthruSerializer) Deserialize(input []byte, typeId string) (interface{}, error) {
+	if (typeId == "") {
+		return nil, nil
+	}
+
 	output := []byte(typeId)
 	output = append(output, ' ')
 	output = append(output, input...)
