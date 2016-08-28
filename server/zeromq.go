@@ -9,31 +9,33 @@ import (
 	"encoding/binary"
 )
 
-var context *zmq4.Context
-var replySocket *zmq4.Socket
+var _context *zmq4.Context
+var _replySocket *zmq4.Socket
+var _addr string
 
 func Bind(addr string) {
 	var err error;
+	_addr = addr
 
-	context, err = zmq4.NewContext()
+	_context, err = zmq4.NewContext()
 	if err != nil {
 		panic(err)
 	}
 
-	replySocket, err = context.NewSocket(zmq4.REP)
+	_replySocket, err = _context.NewSocket(zmq4.REP)
 	if err != nil {
 		panic(err)
 	}
 
-	err = replySocket.Bind(addr)
+	err = _replySocket.Bind(addr)
 	if err != nil {
 		panic(err)
 	}
 }
 
 func Destroy() {
-	replySocket.Close()
-	context.Term()
+	_replySocket.Close()
+	_context.Term()
 }
 
 const NO_FLAGS = zmq4.Flag(0)
@@ -44,8 +46,10 @@ const PAYLOAD_FRAME = 2
 const METADATA_FRAME = 3
 
 func Listen(handler actions.Handler) {
+	fmt.Println("Listening for incoming commands on:", _addr)
+
 	for {
-		message, err := replySocket.RecvMessageBytes(NO_FLAGS)
+		message, err := _replySocket.RecvMessageBytes(NO_FLAGS)
 		if err != nil {
 			fmt.Println("Error receiving command from client", err)
 			continue
@@ -64,11 +68,11 @@ func Listen(handler actions.Handler) {
 			payload := message[PAYLOAD_FRAME]
 			err = handler.AddEvent(data.Event{AggregateId: aggregateId, Payload: payload, Metadata: nil}, actions.NO_EXPECTEDVERSION)
 			if err != nil {
-				replySocket.Send(fmt.Sprintf("Error: %v", err), NO_FLAGS)
+				_replySocket.Send(fmt.Sprintf("Error: %v", err), NO_FLAGS)
 				fmt.Println(err)
 				break
 			}
-			replySocket.Send("Ok", NO_FLAGS)
+			_replySocket.Send("Ok", NO_FLAGS)
 		case "AddEvent_v2":
 			// v2 - "AddEvent" 16:AggregateId,4:expectedVersion {payload} {metadata}
 			aggregateId, err := uuid.FromBytes(message[ARGS_FRAME][0:UUID_SIZE])
@@ -82,11 +86,11 @@ func Listen(handler actions.Handler) {
 			metadata := message[METADATA_FRAME]
 			err = handler.AddEvent(data.Event{AggregateId: aggregateId, Payload: payload, Metadata: metadata}, expectedVersion)
 			if err != nil {
-				replySocket.Send(fmt.Sprintf("Error: %v", err), NO_FLAGS)
+				_replySocket.Send(fmt.Sprintf("Error: %v", err), NO_FLAGS)
 				fmt.Println(err)
 				break
 			}
-			replySocket.Send("Ok", NO_FLAGS)
+			_replySocket.Send("Ok", NO_FLAGS)
 		case "ReadStream", "ReadStream_v2":
 			aggregateId, err := uuid.FromBytes(message[ARGS_FRAME])
 			if err != nil {
@@ -96,28 +100,28 @@ func Listen(handler actions.Handler) {
 			fmt.Println("->", command, aggregateId.String())
 			events, err := handler.RetrieveFor(aggregateId)
 			if err != nil {
-				replySocket.Send(fmt.Sprintf("Error: %v", err), NO_FLAGS)
+				_replySocket.Send(fmt.Sprintf("Error: %v", err), NO_FLAGS)
 				fmt.Println(err)
 				break
 			}
 			if command == "ReadStream_v2" {
-				sendEvents_v2(replySocket, events)
+				sendEvents_v2(_replySocket, events)
 				break;
 			}
-			sendEvents_v1(replySocket, events)
+			sendEvents_v1(_replySocket, events)
 		case "ReadAll", "ReadAll_v2":
 			fmt.Println("->", command)
 			events, err := handler.RetrieveAll()
 			if err != nil {
-				replySocket.Send(fmt.Sprintf("Error: %v", err), NO_FLAGS)
+				_replySocket.Send(fmt.Sprintf("Error: %v", err), NO_FLAGS)
 				fmt.Println(err)
 				break
 			}
 			if command == "ReadAll_v2" {
-				sendEvents_v2(replySocket, events)
+				sendEvents_v2(_replySocket, events)
 				break;
 			}
-			sendEvents_v1(replySocket, events)
+			sendEvents_v1(_replySocket, events)
 		case "Shutdown":
 			fmt.Println("->", command)
 			return

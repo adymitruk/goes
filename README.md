@@ -32,12 +32,12 @@ In your GOPATH folder, execute the following commands:
 
 In the project root folder, execute the following command:
 
-  `go build`
+  `go build -o bin/goes`
   
 ### Running the server
 
 In the project root folder, execute the following command:
 
-  `./goes --db=./events --addr=tcp://127.0.0.1:12345`
+  `./bin/goes --db=./events --addr=tcp://127.0.0.1:12345`
 
 Both flags are optional and their default values are the same as the example.

@@ -23,4 +23,5 @@ type Storage interface {
 	ReadStream(streamId uuid.UUID) ([]*StoredEvent, error)
 	ReadAll() ([]*StoredEvent, error)
 	StreamVersion(streamId uuid.UUID) (uint32, error)
+	RebuildTypeIndexes()
 }

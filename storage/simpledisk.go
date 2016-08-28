@@ -229,3 +229,6 @@ func getStoredData(eventsFile *os.File) (creationTime time.Time, typeId string, 
 	return
 }
 
+func (me SimpleDiskStorage) RebuildTypeIndexes() {
+
+}

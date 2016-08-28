@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-/opt/goes/bin/simpleserver --db /var/events &>/var/log/goes.log &
+/opt/goes/bin/goes --db /var/events &>/var/log/goes.log &

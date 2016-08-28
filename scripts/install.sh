@@ -2,7 +2,7 @@
 # Install Goes
 go get github.com/satori/go.uuid
 go get github.com/pebbe/zmq4
-go build -o bin/simpleserver simpleserver/simpleserver.go
+go build -o bin/goes
 
 sudo mkdir /opt/goes
 sudo cp -R bin /opt/goes

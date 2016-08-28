@@ -12,21 +12,24 @@ import (
 )
 
 const EMPTY_STREAM = uint32(0)
-var CRLF = []byte {'\r', '\n'}
+var CRLF = []byte("\r\n")
 
 type DailyDiskStorage struct {
 	storagePath string
 	indexesPath string
+	typesIndexesPath string
 	globalIndexFilename string
 }
 
 func NewDailyDiskStorage(storagePath string) Storage {
+	fmt.Println("Using DailyDiskStorage path:", storagePath)
 	indexesPath := path.Join(storagePath, "indexes")
 	globalIndexPath := path.Join(indexesPath, "global")
-	if err := os.MkdirAll(indexesPath, 0777); err != nil {
+	typesIndexesPath := path.Join(indexesPath, "types")
+	if err := os.MkdirAll(typesIndexesPath, 0777); err != nil {
 		panic(err)
 	}
-	return &DailyDiskStorage{storagePath, indexesPath, globalIndexPath};
+	return &DailyDiskStorage{storagePath, indexesPath, typesIndexesPath, globalIndexPath};
 }
 
 func (me DailyDiskStorage) getStreamIndexFilename(streamId uuid.UUID) string {
@@ -69,6 +72,21 @@ func appendIndex(filename string, entry *IndexEntry) error {
 	writeSizeAndBytes(indexFile, []byte(entry.typeId))
 
 	return nil
+}
+
+func (me DailyDiskStorage) appendTypeIndex(entry *IndexEntry) error {
+	filename := path.Join(me.typesIndexesPath, entry.typeId)
+	indexFile, err := os.OpenFile(filename, os.O_APPEND | os.O_WRONLY | os.O_CREATE, 0644 )
+	if err != nil {
+		return err
+	}
+	defer indexFile.Close()
+
+	value := me.getEventFilename(entry.creationTime, entry.typeId)
+	start := len(me.storagePath) + 1
+	_, err = indexFile.WriteString(value[start:] + "\r\n")
+
+	return err
 }
 
 func readIndexNextEntry(f *os.File) (*IndexEntry, error) {
@@ -150,7 +168,7 @@ func (me DailyDiskStorage) Write(event *StoredEvent) error {
 		return err
 	}
 
-	return nil
+	return me.appendTypeIndex(index)
 }
 
 func (me DailyDiskStorage) StreamVersion(streamId uuid.UUID) (uint32, error) {
@@ -228,4 +246,35 @@ func (me DailyDiskStorage) ReadAll() ([]*StoredEvent, error) {
 	}
 
 	return events, nil
+}
+
+func (me DailyDiskStorage) RebuildTypeIndexes() {
+	fmt.Print("Rebuilding type indexes... ")
+
+	err := os.RemoveAll(me.typesIndexesPath)
+	if err != nil {
+		panic(err)
+	}
+	err = os.MkdirAll(me.typesIndexesPath, 0644)
+	if err != nil {
+		panic(err)
+	}
+
+	globalIndexFile, err := os.OpenFile(me.globalIndexFilename, os.O_RDONLY, 0)
+	if err != nil {
+		panic(err)
+	}
+
+	for {
+		indexEntry, err := readIndexNextEntry(globalIndexFile)
+		if err != nil && err.Error() == "EOF" {
+			break
+		}
+		if err != nil {
+			panic(err)
+		}
+		me.appendTypeIndex(indexEntry)
+	}
+
+	fmt.Println("Done.")
 }
