@@ -24,7 +24,6 @@ You can look at [scripts/bootstrap.sh](https://github.com/adymitruk/goes/blob/ma
 
 In your GOPATH folder, execute the following commands:
 
-  `go get github.com/adymitruk/goes`  
   `go get github.com/pebbe/zmq4`  
   `go get github.com/satori/go.uuid`  
   
