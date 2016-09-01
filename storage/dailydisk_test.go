@@ -1,4 +1,4 @@
-package goes
+package storage
 
 import (
 	"testing"
@@ -13,23 +13,24 @@ func TestAddEvent(t *testing.T) {
 	//Arrange
 	storagePath := path.Join(os.TempDir(), uuid.NewV4().String())
 	defer os.RemoveAll(storagePath)
-	storage := NewReadableDiskStorage(storagePath)
+	storage := NewDailyDiskStorage(storagePath)
 
 	aLocation, _ := time.LoadLocation("")
 	aTime := time.Date(2016,2,11,9,53,32,1234567, aLocation)
 	aggregateId := uuid.NewV4()
 	aType := "myType"
 	data := []byte("{}")
+	metadata := []byte("{}")
 
 	//Act
-	err := storage.Write(&StoredEvent{aggregateId, aTime, aType, data})
+	err := storage.Write(&StoredEvent{aggregateId, aTime, aType, data, "Metadata", metadata})
 
 	//Assert
 	if err != nil {
 		t.Errorf("Write failed. Error: %v", err)
 	}
 
-	readableDiskStorage := storage.(*ReadableDiskStorage)
+	readableDiskStorage := storage.(*DailyDiskStorage)
 
 	globalIndexFi, _ := os.Stat(readableDiskStorage.globalIndexFilename)
 	if globalIndexFi == nil {
@@ -51,12 +52,12 @@ func TestReadStream(t *testing.T) {
 	//Arrange
 	storagePath := path.Join(os.TempDir(), uuid.NewV4().String())
 	defer os.RemoveAll(storagePath)
-	storage := NewReadableDiskStorage(storagePath)
+	storage := NewDailyDiskStorage(storagePath)
 
 	streamId := uuid.NewV4()
-	ev1 := &StoredEvent{streamId, time.Now(), "1stType", []byte("1stEvent")}
+	ev1 := &StoredEvent{streamId, time.Now(), "1stType", []byte("1stEvent"), "Metadata", []byte("{}")}
 	storage.Write(ev1)
-	ev2 := &StoredEvent{streamId, time.Now(), "2ndType", []byte("2ndEvent")}
+	ev2 := &StoredEvent{streamId, time.Now(), "2ndType", []byte("2ndEvent"), "Metadata", []byte("{}")}
 	storage.Write(ev2)
 
 	//Act
@@ -85,15 +86,15 @@ func TestReadAll(t *testing.T) {
 	//Arrange
 	storagePath := path.Join(os.TempDir(), uuid.NewV4().String())
 	defer os.RemoveAll(storagePath)
-	storage := NewReadableDiskStorage(storagePath)
+	storage := NewDailyDiskStorage(storagePath)
 
 	stream1Id := uuid.NewV4()
 	stream2Id := uuid.NewV4()
-	ev1 := &StoredEvent{stream1Id, time.Now(), "1stType", []byte("1stEvent")}
+	ev1 := &StoredEvent{stream1Id, time.Now(), "1stType", []byte("1stEvent"), "Metadata", []byte("{}")}
 	storage.Write(ev1)
-	ev2 := &StoredEvent{stream2Id, time.Now(), "2ndType", []byte("2ndEvent")}
+	ev2 := &StoredEvent{stream2Id, time.Now(), "2ndType", []byte("2ndEvent"), "Metadata", []byte("{}")}
 	storage.Write(ev2)
-	ev3 := &StoredEvent{stream1Id, time.Now(), "3rdType", []byte("3rdEvent")}
+	ev3 := &StoredEvent{stream1Id, time.Now(), "3rdType", []byte("3rdEvent"), "Metadata", []byte("{}")}
 	storage.Write(ev3)
 
 	//Act

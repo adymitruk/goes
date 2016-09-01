@@ -1,94 +1,48 @@
-package goes
+package main
 
 import (
-	"github.com/satori/go.uuid"
-	"time"
+	actions "./actions"
+	serializer "./serializer"
+	server "./server"
+	storage "./storage"
+	"flag"
+	"fmt"
+	"os"
+	"path"
 )
 
-var serializer Serializer
-var storage Storage
+var addr = flag.String("addr", "tcp://127.0.0.1:12345", "zeromq address to listen to")
+var db = flag.String("db", fmt.Sprintf(".%cevents", os.PathSeparator), "path for storage")
+var buildTypeIndexes = flag.Bool("buildTypeIndexes", false, "Build type indexes")
 
-type Event struct {
-	AggregateId uuid.UUID
-	Payload     interface{}
+func PathIsAbsolute(s string) bool {
+	if len(s) > 1 && s[1] == ':' {
+		return true
+	}
+	return path.IsAbs(s)
 }
 
-func SetStorage(newStorage Storage) {
-	storage = newStorage
-}
+func main() {
+	fmt.Println("GoES - Go Event Store")
+	fmt.Println("Released under the MIT license. See LICENSE file.")
+	fmt.Println()
 
-func SetSerializer(newSerializer Serializer) {
-	serializer = newSerializer
-}
+	flag.Parse()
 
-var mapLock chan int = make(chan int, 1)
-var streamsLock map[string]chan int = make(map[string]chan int)
-
-func lockStream(streamName string) {
-	mapLock <- 1
-	defer func(){
-		<-mapLock
-	}()
-
-	streamLock := streamsLock[streamName]
-	if streamLock == nil {
-		streamLock = make(chan int, 1)
-		streamsLock[streamName] = streamLock
+	storagePath := *db
+	if !PathIsAbsolute(storagePath) {
+		wd, _ := os.Getwd()
+		storagePath = path.Join(wd, storagePath)
 	}
 
-	streamLock <- 1
-}
-
-func unlockStream(streamName string) {
-	<-streamsLock[streamName]
-}
-
-func AddEvent(event Event) error {
-	streamName := event.AggregateId.String()
-
-	lockStream(streamName)
-	defer unlockStream(streamName)
-
-	serializedPayload, typeId, err := serializer.Serialize(event.Payload)
-	if err != nil {
-		return err
+	diskStorage := storage.NewDailyDiskStorage(storagePath)
+	if *buildTypeIndexes {
+		diskStorage.RebuildTypeIndexes()
+		return
 	}
 
-	return storage.Write(&StoredEvent{event.AggregateId, time.Now(), typeId, serializedPayload})
-}
-
-func RetrieveFor(aggregateId uuid.UUID) ([]*Event, error) {
-	results, err := storage.ReadStream(aggregateId)
-	if err != nil {
-		return nil, err
-	}
-
-	events := make([]*Event, 0)
-	for _, storedEvent := range results {
-		event, err := serializer.Deserialize(storedEvent.Data, storedEvent.TypeId)
-		if err != nil {
-			return nil, err
-		}
-		events = append(events, &Event{storedEvent.StreamId, event})
-	}
-
-	return events, nil
-}
-
-func RetrieveAll() ([]*Event, error) {
-	results, err := storage.ReadAll()
-	if err != nil {
-		return nil, err
-	}
-
-	events := make([]*Event, 0)
-	for _, storedEvent := range results {
-		event, err := serializer.Deserialize(storedEvent.Data, storedEvent.TypeId)
-		if err != nil {
-			return nil, err
-		}
-		events = append(events, &Event{storedEvent.StreamId, event})
-	}
-
-	return events, nil
+	var handler = actions.NewActionsHandler(diskStorage, serializer.NewPassthruSerializer())
+	server.Bind(*addr)
+	server.Listen(handler)
+	server.Destroy()
 }

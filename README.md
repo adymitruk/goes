@@ -1,8 +1,12 @@
+# Goes
+
 GoLang implementation of a simple EventStore
 
-# Getting started
+Released under the MIT license. See [LICENSE](https://github.com/adymitruk/goes/blob/master/LICENSE) file.
 
-## Pre-requisites
+## Getting started
+
+### Pre-requisites
 
 - Install [GoLang](https://golang.org/doc/install) version 1.6+
 - Install [libsodium](https://download.libsodium.org/libsodium/releases/)\* version 1.0.10+ (Linux only^)
@@ -12,27 +16,26 @@ GoLang implementation of a simple EventStore
 \* On Linux libsodium and zeromq are installed from source (`./configure && make && sudo make install && sudo ldconfig`)  
 ^ On Window libzmq and libsodium are installed using pacman in MSYS2 shell (`pacman -S mingw-w64-x86_64-zeromq`)
 
-## Build
+You can look at [scripts/bootstrap.sh](https://github.com/adymitruk/goes/blob/master/scripts/bootstrap.sh) to get an idea on how to install all the pre-requisites.
 
-### Fetching GO packages
+### Build
+
+#### Fetching GO packages
 
 In your GOPATH folder, execute the following commands:
 
-  `go get github.com/adymitruk/goes`  
   `go get github.com/pebbe/zmq4`  
   `go get github.com/satori/go.uuid`  
   
-### Compiling the binary
+#### Compiling the binary
 
-In your GOPATH folder, execute the following command:
+In the project root folder, execute the following command:
 
-  `go build -o bin/goes src/github.com/adymitruk/goes/simpleserver/simpleserver.go`
+  `go build -o bin/goes`
   
-\* Use `-o bin/goes.exe` on Windows
+### Running the server
 
-## Running the server
-
-In your GOPATH folder, execute the following command:
+In the project root folder, execute the following command:
 
   `./bin/goes --db=./events --addr=tcp://127.0.0.1:12345`
 
